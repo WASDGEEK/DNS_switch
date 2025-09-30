@@ -1,0 +1,22 @@
+# Cloudflare DNS 更新配置文件
+
+# API 密钥（从 https://dash.cloudflare.com/profile/api-tokens 获取）Global API Key
+api_key: your_api_key_here
+
+# Cloudflare 账户邮箱
+email: your@email.com
+
+# 域名
+zone: example.com
+
+# 主机记录（完整域名）
+record: homeserver.example.com
+
+# 目标 IP 地址
+ip: 1.2.3.4
+
+# 记录类型 (A 或 AAAA，可选)
+type: A
+
+# TTL 值 (60-86400，可选)
+ttl: 60
