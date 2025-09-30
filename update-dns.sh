@@ -4,9 +4,46 @@ set -o nounset
 set -o pipefail
 
 # Cloudflare DNS 记录更新脚本
-# 用法: ./update-dns.sh -k API密钥 -u 邮箱 -z 域名 -h 主机记录 -i IP地址 [-t A|AAAA] [-l 120]
+# 用法: ./update-dns.sh [-c config.yml] 或使用命令行参数覆盖配置文件
 
-# 默认配置
+# 默认配置文件路径
+CONFIG_FILE="config.yml"
+
+# 解析 YAML 配置文件的函数
+parse_yaml() {
+  local file=$1
+  local prefix=$2
+  
+  if [ ! -f "$file" ]; then
+    return
+  fi
+  
+  # 简单的 YAML 解析（支持基本的 key: value 格式）
+  while IFS=': ' read -r key value; do
+    # 跳过空行和注释
+    [[ -z "$key" || "$key" =~ ^#.*$ ]] && continue
+    
+    # 移除前后空格和引号
+    key=$(echo "$key" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    value=$(echo "$value" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//;s/^["'\'']*//;s/["'\'']*$//')
+    
+    # 跳过空值
+    [[ -z "$value" ]] && continue
+    
+    # 设置变量
+    case "$key" in
+      api_key|CFKEY) CFKEY="$value" ;;
+      email|CFUSER) CFUSER="$value" ;;
+      zone|CFZONE_NAME) CFZONE_NAME="$value" ;;
+      record|CFRECORD_NAME) CFRECORD_NAME="$value" ;;
+      ip|TARGET_IP) TARGET_IP="$value" ;;
+      type|CFRECORD_TYPE) CFRECORD_TYPE="$value" ;;
+      ttl|CFTTL) CFTTL="$value" ;;
+    esac
+  done < "$file"
+}
+
+# 初始化默认值
 CFKEY=""
 CFUSER=""
 CFZONE_NAME=""
@@ -15,43 +52,65 @@ TARGET_IP=""
 CFRECORD_TYPE="A"
 CFTTL=120
 
-# 获取参数
-while getopts k:u:z:h:i:t:l: opts; do
+# 获取参数（包括配置文件路径）
+while getopts c:k:u:z:h:i:t:l: opts; do
   case ${opts} in
-    k) CFKEY=${OPTARG} ;;
-    u) CFUSER=${OPTARG} ;;
-    z) CFZONE_NAME=${OPTARG} ;;
-    h) CFRECORD_NAME=${OPTARG} ;;
-    i) TARGET_IP=${OPTARG} ;;
-    t) CFRECORD_TYPE=${OPTARG} ;;
-    l) CFTTL=${OPTARG} ;;
+    c) CONFIG_FILE=${OPTARG} ;;
+    k) CFKEY_CLI=${OPTARG} ;;
+    u) CFUSER_CLI=${OPTARG} ;;
+    z) CFZONE_NAME_CLI=${OPTARG} ;;
+    h) CFRECORD_NAME_CLI=${OPTARG} ;;
+    i) TARGET_IP_CLI=${OPTARG} ;;
+    t) CFRECORD_TYPE_CLI=${OPTARG} ;;
+    l) CFTTL_CLI=${OPTARG} ;;
   esac
 done
 
+# 读取配置文件
+if [ -f "$CONFIG_FILE" ]; then
+  echo "正在读取配置文件: $CONFIG_FILE"
+  parse_yaml "$CONFIG_FILE"
+else
+  echo "警告: 配置文件 $CONFIG_FILE 不存在，使用命令行参数"
+fi
+
+# 命令行参数覆盖配置文件
+[ ! -z "${CFKEY_CLI:-}" ] && CFKEY="$CFKEY_CLI"
+[ ! -z "${CFUSER_CLI:-}" ] && CFUSER="$CFUSER_CLI"
+[ ! -z "${CFZONE_NAME_CLI:-}" ] && CFZONE_NAME="$CFZONE_NAME_CLI"
+[ ! -z "${CFRECORD_NAME_CLI:-}" ] && CFRECORD_NAME="$CFRECORD_NAME_CLI"
+[ ! -z "${TARGET_IP_CLI:-}" ] && TARGET_IP="$TARGET_IP_CLI"
+[ ! -z "${CFRECORD_TYPE_CLI:-}" ] && CFRECORD_TYPE="$CFRECORD_TYPE_CLI"
+[ ! -z "${CFTTL_CLI:-}" ] && CFTTL="$CFTTL_CLI"
+
 # 检查必需参数
 if [ -z "$CFKEY" ]; then
-  echo "错误: 缺少 API 密钥 (-k)"
-  echo "使用方法: $0 -k API密钥 -u 邮箱 -z 域名 -h 主机记录 -i IP地址"
+  echo "错误: 缺少 API 密钥"
+  echo "请在 config.yml 中配置或使用 -k 参数"
   exit 1
 fi
 
 if [ -z "$CFUSER" ]; then
-  echo "错误: 缺少用户邮箱 (-u)"
+  echo "错误: 缺少用户邮箱"
+  echo "请在 config.yml 中配置或使用 -u 参数"
   exit 1
 fi
 
 if [ -z "$CFZONE_NAME" ]; then
-  echo "错误: 缺少域名 (-z)"
+  echo "错误: 缺少域名"
+  echo "请在 config.yml 中配置或使用 -z 参数"
   exit 1
 fi
 
 if [ -z "$CFRECORD_NAME" ]; then
-  echo "错误: 缺少主机记录 (-h)"
+  echo "错误: 缺少主机记录"
+  echo "请在 config.yml 中配置或使用 -h 参数"
   exit 1
 fi
 
 if [ -z "$TARGET_IP" ]; then
-  echo "错误: 缺少目标 IP 地址 (-i)"
+  echo "错误: 缺少目标 IP 地址"
+  echo "请在 config.yml 中配置或使用 -i 参数"
   exit 1
 fi
 
